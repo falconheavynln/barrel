@@ -4,7 +4,6 @@ from os import listdir
 from os.path import isfile, join
 
 from math import sqrt
-from random import randint
 
 pygame.init()
 
@@ -33,6 +32,7 @@ def load_sprite_sheets(path, width, height, flip=False):
             surface = pygame.Surface((width, height), pygame.SRCALPHA, 32)
             rect = pygame.Rect(i * width, 0, width, height)
             surface.blit(spritesheet, (0, 0), rect)
+            print(surface)
             sprites.append(surface)
         if flip:
             allsprites[image.replace(".png", "") + "_right"] = sprites
@@ -45,21 +45,26 @@ def load_sprite_sheets(path, width, height, flip=False):
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, rect, character, speed, mspeed):
+    def __init__(self, rect, character, gun, speed, mspeed):
         super().__init__()
         self.rect = rect
-        self.character = character
+        self.character, self.gun = character, gun
         self.speed, self.mspeed = speed, mspeed
         self.animdelay = 2
-        self.sprites = load_sprite_sheets(
-            join(PATH, "characters", self.character), self.rect.w, self.rect.h, True
-        )
-        self.direction = "right"
-        self.image = self.sprites["joe" + "_" + self.direction]
+        self.image = pygame.Surface((64, 64), pygame.SRCALPHA)
+        self.body_image = pygame.image.load(
+            join(PATH, "characters", character + ".png")
+        ).convert_alpha()
+        self.gun_image = pygame.image.load(
+            join(PATH, "guns", gun + ".png")
+        ).convert_alpha()
+        self.image.blit(self.body_image, (0, 0))
+        self.image.blit(self.gun_image, (0, 0))
+        self.angle = 100
         self.movement = [0, 0]
         self.animcount = 0
 
-    def loop(self, offset):
+    def loop(self):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.direction, self.animcount = "left", 0
@@ -101,10 +106,7 @@ class Player(pygame.sprite.Sprite):
         self.rect.x += self.movement[0]
         self.rect.y += self.movement[1]
 
-        self.animcount = (
-            (self.animcount + 1) // self.animdelay % len(self.sprites["joe_right"])
-        )
-        self.image = self.sprites["joe" + "_" + self.direction][self.animcount]
+        self.rotated_image = pygame.transform.rotate(self.image, self.angle)
 
 
 class Enemy(pygame.sprite.Sprite):
@@ -115,22 +117,16 @@ class Enemy(pygame.sprite.Sprite):
         self.speed, self.mspeed = speed, mspeed
         self.aggro = False
         self.animdelay = 2
-        self.sprites = load_sprite_sheets(
-            join(PATH, "enemies", self.character),
-            self.rect.w,
-            self.rect.h,
-            True,
-        )
-        self.direction = "right"
-        self.image = self.sprites[character + "_" + self.direction]
+        self.image = pygame.image.load(
+            join(PATH, "enemies", character + ".png")
+        ).convert_alpha()
+        self.angle = 100
         self.movement = [0, 0]
-        self.animcount = 0
 
     def loop(self, player, offset):
         x_dist = (player.rect.x - offset[0]) - (self.rect.x - offset[0])
         y_dist = (player.rect.y - offset[1]) - (self.rect.y - offset[1])
         total_dist = sqrt(abs(int(x_dist) ^ 2) + abs(int(y_dist) ^ 2))
-        print(total_dist)
         if total_dist < 2.5:
             self.movement = [0, 0]
         else:
@@ -152,12 +148,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x += self.movement[0]
         self.rect.y += self.movement[1]
 
-        self.animcount = (
-            (self.animcount + 1)
-            // self.animdelay
-            % len(self.sprites[self.character + "_right"])
-        )
-        self.image = self.sprites[self.character + "_" + self.direction][self.animcount]
+        self.rotated_image = pygame.transform.rotate(self.image, self.angle)
 
 
 def scroll(player, offset):
@@ -172,41 +163,38 @@ def scroll(player, offset):
     return offset
 
 
-def draw(objects, offset, grass_offset):
-    tile_image = pygame.image.load(join(PATH, "grass.png"))
+def draw(objects, offset):
+    tile_image = pygame.image.load(join(PATH, "tile.png"))
     _, _, tile_width, tile_height = tile_image.get_rect()
     _ = [
         [
             wd.blit(
                 tile_image,
                 (
-                    i * tile_width + grass_offset[i][j][0] - offset[0],
-                    j * tile_height + grass_offset[i][j][1] - offset[1],
+                    i * tile_width - (offset[0] % tile_width),
+                    j * tile_height - (offset[1] % tile_height),
                 ),
             )
-            for j in range(HEIGHT * 10 // tile_height)
+            for j in range(HEIGHT // tile_height + 10)
         ]
-        for i in range(WIDTH * 10 // tile_width)
+        for i in range(WIDTH // tile_width + 10)
     ]
 
     for object in objects:
-        wd.blit(object.image, (object.rect.x - offset[0], object.rect.y - offset[1]))
-
-    return grass_offset
+        wd.blit(
+            object.rotated_image, (object.rect.x - offset[0], object.rect.y - offset[1])
+        )
 
 
 def main():
-    player = Player(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "joe", 1.5, 8)
+    player = Player(
+        pygame.rect.Rect(WIDTH / 2 - 32, HEIGHT / 2 - 32, 64, 64),
+        "joe",
+        "meow",
+        1.5,
+        8,
+    )
     enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "zombo", 1, 4)
-    tile_image = pygame.image.load(join(PATH, "grass.png"))
-    _, _, tile_width, tile_height = tile_image.get_rect()
-    grass_offset = [
-        [
-            [randint(-20, 20) * 1.5, randint(-20, 20) * 1.5]
-            for _ in range(HEIGHT * 10 // tile_height)
-        ]
-        for _ in range(WIDTH * 10 // tile_width)
-    ]
     offset = [0, 0]
 
     clock = pygame.time.Clock()
@@ -220,10 +208,10 @@ def main():
                 break
 
         wd.fill((26, 36, 112))
-        offset = scroll(player, offset)
-        player.loop(offset)
+        offset = [player.rect.x - WIDTH / 2 + 32, player.rect.y - HEIGHT / 2 + 32]
+        player.loop()
         enemy.loop(player, offset)
-        draw([player, enemy], offset, grass_offset)
+        draw([player, enemy], offset)
 
     pygame.quit()
     quit()
