@@ -7,9 +7,9 @@ from math import sqrt
 
 pygame.init()
 
-WIDTH = 900
-HEIGHT = 500
-SCROLL = (WIDTH // 4, HEIGHT // 4)
+WIDTH = 1000
+HEIGHT = 650
+SCROLL = (WIDTH // 3, HEIGHT // 3)
 
 FPS = 60
 
@@ -51,6 +51,7 @@ class Player(pygame.sprite.Sprite):
         self.character, self.gun = character, gun
         self.speed, self.mspeed = speed, mspeed
         self.animdelay = 2
+        self.perception = 0.5
         self.image = pygame.Surface((64, 64), pygame.SRCALPHA)
         self.body_image = pygame.image.load(
             join(PATH, "characters", character + ".png")
@@ -152,6 +153,9 @@ class Enemy(pygame.sprite.Sprite):
 
 
 def scroll(player, offset):
+    look_offset = [0, 0]
+    look_offset[0] = (pygame.mouse.get_pos()[0] - WIDTH // 2) * player.perception
+    look_offset[1] = (pygame.mouse.get_pos()[1] - HEIGHT // 2) * player.perception
     if (
         player.rect.right - offset[0] >= WIDTH - SCROLL[0] and player.movement[0] > 0
     ) or ((player.rect.left - offset[0] <= SCROLL[0]) and player.movement[0] < 0):
@@ -160,10 +164,10 @@ def scroll(player, offset):
         player.rect.bottom - offset[1] >= HEIGHT - SCROLL[1] and player.movement[1] > 0
     ) or ((player.rect.top - offset[1] <= SCROLL[1]) and player.movement[1] < 0):
         offset[1] += player.movement[1]
-    return offset
+    return offset, look_offset
 
 
-def draw(objects, offset):
+def draw(objects, offset, look_offset):
     tile_image = pygame.image.load(join(PATH, "tile.png"))
     _, _, tile_width, tile_height = tile_image.get_rect()
     _ = [
@@ -171,8 +175,8 @@ def draw(objects, offset):
             wd.blit(
                 tile_image,
                 (
-                    i * tile_width - (offset[0] % tile_width),
-                    j * tile_height - (offset[1] % tile_height),
+                    i * tile_width - ((offset[0] + look_offset[0]) % tile_width),
+                    j * tile_height - ((offset[1] + look_offset[1]) % tile_height),
                 ),
             )
             for j in range(HEIGHT // tile_height + 10)
@@ -182,7 +186,11 @@ def draw(objects, offset):
 
     for object in objects:
         wd.blit(
-            object.rotated_image, (object.rect.x - offset[0], object.rect.y - offset[1])
+            object.rotated_image,
+            (
+                object.rect.x - offset[0] - look_offset[0],
+                object.rect.y - offset[1] - look_offset[1],
+            ),
         )
 
 
@@ -195,7 +203,7 @@ def main():
         8,
     )
     enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "zombo", 1, 4)
-    offset = [0, 0]
+    offset, look_offset = [0, 0], [0, 0]
 
     clock = pygame.time.Clock()
     run = True
@@ -208,10 +216,10 @@ def main():
                 break
 
         wd.fill((26, 36, 112))
-        offset = [player.rect.x - WIDTH / 2 + 32, player.rect.y - HEIGHT / 2 + 32]
+        offset, look_offset = scroll(player, offset)
         player.loop()
         enemy.loop(player, offset)
-        draw([player, enemy], offset)
+        draw([player, enemy], offset, look_offset)
 
     pygame.quit()
     quit()
