@@ -3,7 +3,8 @@ import pygame
 from os import listdir
 from os.path import isfile, join
 
-from math import sqrt
+from math import sqrt, sin
+
 
 pygame.init()
 
@@ -44,6 +45,13 @@ def load_sprite_sheets(path, width, height, flip=False):
     return allsprites
 
 
+class Bullet(pygame.sprite.Sprite):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, rect, character, gun, speed, mspeed):
         super().__init__()
@@ -61,11 +69,12 @@ class Player(pygame.sprite.Sprite):
         ).convert_alpha()
         self.image.blit(self.body_image, (0, 0))
         self.image.blit(self.gun_image, (0, 0))
-        self.angle = 100
+        self.angle = 0
+        self.bullets = []
         self.movement = [0, 0]
         self.animcount = 0
 
-    def loop(self):
+    def loop(self, offset):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.direction, self.animcount = "left", 0
@@ -106,6 +115,20 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.x += self.movement[0]
         self.rect.y += self.movement[1]
+
+        mouse_pos = pygame.mouse.get_pos()
+        self.vector = pygame.Vector2(
+            mouse_pos[0] - (self.rect.centerx - offset[0]),
+            mouse_pos[1] - (self.rect.centery - offset[1]),
+        )
+        self.polar = self.vector.as_polar()
+        self.angle = (-self.polar[1] + 360) % 360
+
+        self.rotation_offset = abs(
+            ((sin(90 - ((self.angle + 45) % 90)) * sqrt(2)) / 2 - 1 / 2) * sqrt(2)
+        )
+
+        print(self.rotation_offset)
 
         self.rotated_image = pygame.transform.rotate(self.image, self.angle)
 
@@ -168,6 +191,7 @@ def scroll(player, offset):
 
 
 def draw(objects, offset, look_offset):
+    # print(objects[0].rect, offset)
     tile_image = pygame.image.load(join(PATH, "tile.png"))
     _, _, tile_width, tile_height = tile_image.get_rect()
     _ = [
@@ -185,24 +209,33 @@ def draw(objects, offset, look_offset):
     ]
 
     for object in objects:
-        wd.blit(
-            object.rotated_image,
-            (
-                object.rect.x - offset[0] - look_offset[0],
-                object.rect.y - offset[1] - look_offset[1],
-            ),
-        )
+        if type(object) is Player:
+            wd.blit(
+                object.rotated_image,
+                (
+                    object.rect.x - offset[0] - look_offset[0] - object.rotation_offset,
+                    object.rect.y - offset[1] - look_offset[1] - object.rotation_offset,
+                ),
+            )
+        else:
+            wd.blit(
+                object.rotated_image,
+                (
+                    object.rect.x - offset[0] - look_offset[0],
+                    object.rect.y - offset[1] - look_offset[1],
+                ),
+            )
 
 
 def main():
     player = Player(
         pygame.rect.Rect(WIDTH / 2 - 32, HEIGHT / 2 - 32, 64, 64),
-        "joe",
-        "meow",
+        "green",
+        "arrow",
         1.5,
         8,
     )
-    enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "zombo", 1, 4)
+    # enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "zombo", 1, 4)
     offset, look_offset = [0, 0], [0, 0]
 
     clock = pygame.time.Clock()
@@ -215,11 +248,10 @@ def main():
                 run = False
                 break
 
-        wd.fill((26, 36, 112))
         offset, look_offset = scroll(player, offset)
-        player.loop()
-        enemy.loop(player, offset)
-        draw([player, enemy], offset, look_offset)
+        player.loop(offset)
+        # enemy.loop(player, offset)
+        draw([player], offset, look_offset)
 
     pygame.quit()
     quit()
