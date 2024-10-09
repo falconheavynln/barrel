@@ -3,7 +3,7 @@ import pygame
 from os import listdir
 from os.path import isfile, join
 
-from math import sqrt, sin
+from math import sqrt, sin, pi
 
 
 pygame.init()
@@ -60,21 +60,12 @@ class Player(pygame.sprite.Sprite):
         self.speed, self.mspeed = speed, mspeed
         self.animdelay = 2
         self.perception = 0.5
-        self.image = pygame.Surface((64, 64), pygame.SRCALPHA)
-        self.body_image = pygame.image.load(
-            join(PATH, "characters", character + ".png")
-        ).convert_alpha()
-        self.gun_image = pygame.image.load(
-            join(PATH, "guns", gun + ".png")
-        ).convert_alpha()
-        self.image.blit(self.body_image, (0, 0))
-        self.image.blit(self.gun_image, (0, 0))
         self.angle = 0
         self.bullets = []
         self.movement = [0, 0]
         self.animcount = 0
 
-    def loop(self, offset):
+    def loop(self, offset, look_offset):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.direction, self.animcount = "left", 0
@@ -113,22 +104,34 @@ class Player(pygame.sprite.Sprite):
         else:
             self.movement[1] *= 0.9
 
+        if keys[pygame.K_p]:
+            self.character = "green"
+        elif keys[pygame.K_o]:
+            self.character = "joe"
+
         self.rect.x += self.movement[0]
         self.rect.y += self.movement[1]
 
         mouse_pos = pygame.mouse.get_pos()
         self.vector = pygame.Vector2(
-            mouse_pos[0] - (self.rect.centerx - offset[0]),
-            mouse_pos[1] - (self.rect.centery - offset[1]),
+            mouse_pos[0] - (self.rect.centerx - offset[0] - look_offset[0]),
+            mouse_pos[1] - (self.rect.centery - offset[1] - look_offset[1]),
         )
         self.polar = self.vector.as_polar()
         self.angle = (-self.polar[1] + 360) % 360
 
-        self.rotation_offset = abs(
-            ((sin(90 - ((self.angle + 45) % 90)) * sqrt(2)) / 2 - 1 / 2) * sqrt(2)
-        )
+        self.rads = self.angle / 360 * 2 * pi
 
-        print(self.rotation_offset)
+        self.rotation_offset = self.rect.w * abs(sin(2 * self.rads)) * sqrt(2) / 7
+        self.image = pygame.Surface((self.rect.w, self.rect.h), pygame.SRCALPHA)
+        self.body_image = pygame.image.load(
+            join(PATH, "characters", self.character + ".png")
+        ).convert_alpha()
+        self.gun_image = pygame.image.load(
+            join(PATH, "guns", self.gun + ".png")
+        ).convert_alpha()
+        self.image.blit(self.body_image, (0, 0))
+        self.image.blit(self.gun_image, (0, 0))
 
         self.rotated_image = pygame.transform.rotate(self.image, self.angle)
 
@@ -208,6 +211,14 @@ def draw(objects, offset, look_offset):
         for i in range(WIDTH // tile_width + 10)
     ]
 
+    # wd.blit(
+    #     pygame.Surface((64, 64)),
+    #     (
+    #         objects[0].rect.centerx - offset[0] - look_offset[0],
+    #         objects[0].rect.centery - offset[1] - look_offset[1],
+    #     ),
+    # )
+
     for object in objects:
         if type(object) is Player:
             wd.blit(
@@ -229,13 +240,13 @@ def draw(objects, offset, look_offset):
 
 def main():
     player = Player(
-        pygame.rect.Rect(WIDTH / 2 - 32, HEIGHT / 2 - 32, 64, 64),
-        "green",
+        pygame.rect.Rect(WIDTH / 2 - 32, HEIGHT / 2 - 32, 128, 128),
+        "default",
         "arrow",
         1.5,
         8,
     )
-    # enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 64, 64), "zombo", 1, 4)
+    enemy = Enemy(pygame.rect.Rect(WIDTH / 2, HEIGHT / 2, 128, 128), "zombo", 1, 4)
     offset, look_offset = [0, 0], [0, 0]
 
     clock = pygame.time.Clock()
@@ -249,9 +260,9 @@ def main():
                 break
 
         offset, look_offset = scroll(player, offset)
-        player.loop(offset)
-        # enemy.loop(player, offset)
-        draw([player], offset, look_offset)
+        player.loop(offset, look_offset)
+        enemy.loop(player, offset)
+        draw([player, enemy], offset, look_offset)
 
     pygame.quit()
     quit()
